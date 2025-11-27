@@ -14,7 +14,6 @@ async def get_seller_orders(current_user = Depends(get_current_user)):
 
         # 2) Get only orders that belong to this seller
         orders = await db.order.find({"seller": seller["_id"]}).to_list(length=None)
-        print(orders)
         seller_orders = []
         for o in orders:
             # make sure items are JSON-safe

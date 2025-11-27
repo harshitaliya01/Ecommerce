@@ -23,7 +23,6 @@ app.add_middleware(
 
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
-
 app.include_router(user.router, tags=["User"])
 app.include_router(forgot_pwd_user.router, tags=["User"])
 app.include_router(address.router, tags=["User-Address"])

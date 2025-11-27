@@ -1,4 +1,4 @@
-from models.models import Admin, AdminLogin
+from models.models import AdminLogin
 from utils.security import hash_password,create_access_token,verify_password
 from fastapi import APIRouter, HTTPException
 import os

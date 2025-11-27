@@ -81,7 +81,6 @@ async def get_cart(current_user=Depends(get_current_user)):
             })
     total, final = await cart_total_save(user["_id"])
 
-    print("0")
     return {
         "items": carts,
         "total": total,

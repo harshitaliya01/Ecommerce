@@ -13,20 +13,14 @@ router = APIRouter()
 @router.post("/user/register/")
 async def register(user: User):
     try:
-        print("0")
-        try:
-            existing = await db.user.find_one({"email": user.email})
-        except Exception as e:
-            print(str(e))
+        existing = await db.user.find_one({"email": user.email})
         if existing:
             raise HTTPException(status_code=400, detail="Email Already Registered")
 
-        print("1")
         hashed_pw = hash_password(user.password)
         otp = generate_otp()
         otp_expiry = datetime.utcnow() + timedelta(minutes=int(os.getenv("OTP_EXPIRE_MINUTES")))
 
-        print("2")
         doc = {
             "name": user.name,
             "email": user.email,
