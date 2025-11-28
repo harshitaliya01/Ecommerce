@@ -43,4 +43,4 @@ app.include_router(category.router, tags=["Category"])
 
 @app.get("/",)
 def home():
-    return {"message": "Hospital API Running"}
+    return {"message": "E-Commerce API Running"}
