@@ -67,6 +67,7 @@
 
 ## 🛍 Product APIs (`routes/product/product.py`, `product_up_del.py`)
 
+* **GET `/all/products/`** – Any Can gets a list of products by Pagination give it page and size.
 * **POST `/product/add/`** – Seller adds a new product with details and image (Supabase upload).
 * **GET `/products/`** – Seller gets a list of their own products.
 * **PUT `/product/update/{product_id}/`** – Seller updates product details and/or image.
