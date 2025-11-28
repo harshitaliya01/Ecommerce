@@ -88,11 +88,9 @@ async def update_product(
                     {"content-type": photo.content_type},
                 )
             except Exception as e:
-                print("Supabase upload error:", e)
                 raise HTTPException(status_code=500, detail="Failed to upload image")
 
             if isinstance(upload_res, dict) and upload_res.get("error"):
-                print("Supabase upload error:", upload_res["error"])
                 raise HTTPException(status_code=500, detail="Failed to upload image")
 
             image_url = supabase.storage.from_("product-image").get_public_url(file_path)
@@ -160,9 +158,7 @@ async def _delete_image_from_supabase(image_url: str):
     try:
         res = supabase.storage.from_("product-image").remove([file_path])
         # Optional: check res for error depending on supabase-py version
-        # print("Supabase remove result:", res)
     except Exception as e:
-        # Don't break the whole API for a failed delete
         print("Supabase delete error:", e)
 
 
