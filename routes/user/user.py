@@ -59,9 +59,6 @@ async def register(user: User):
 
 
 
-
-
-
 @router.post("/user/verify-otp/")
 async def verify_otp(data: VerifyOTP):
     try:

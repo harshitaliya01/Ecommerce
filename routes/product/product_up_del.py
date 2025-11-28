@@ -1,7 +1,7 @@
 import os
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form,Request
-from db.db import db
+from db.db import db, supabase, SUPABASE_URL
 from utils.security import get_current_user
 from utils.check import chk_seller
 from typing import Optional
@@ -9,15 +9,22 @@ from bson import ObjectId
 
 router = APIRouter()
 
-import os, re
-UPLOAD_DIR = "uploads"
-for fn in os.listdir(UPLOAD_DIR):
-    if fn.endswith('"}') or fn.endswith("'}"):
-        clean = re.sub(r'["\'}]+$', '', fn)
-        os.rename(os.path.join(UPLOAD_DIR, fn), os.path.join(UPLOAD_DIR, clean))
-        print("Renamed", fn, "->", clean)
 
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+def _get_file_path_from_url(image_url: str) -> Optional[str]:
+    """
+    Extracts the file path used in Supabase Storage from the public URL.
+    Works when URL looks like:
+    https://<project>.supabase.co/storage/v1/object/public/<bucket>/products/abc.png
+    """
+    # Standard public URL prefix
+    prefix = f"{SUPABASE_URL}/storage/v1/object/public/product-image/"
+    if image_url.startswith(prefix):
+        return image_url[len(prefix):]
+    # If for some reason you saved only path, just return it
+    if not image_url.startswith("http"):
+        return image_url
+    return None
+
 
 @router.put("/product/update/{product_id}/")
 async def update_product(
@@ -64,37 +71,33 @@ async def update_product(
             if not (photo.content_type and photo.content_type.startswith("image/")):
                 raise HTTPException(status_code=400, detail="Only image files allowed for photo")
 
+            # 1. delete old image from Supabase (if exists)
+            old_image_url = product.get("image_url")
+            if old_image_url:
+                await _delete_image_from_supabase(old_image_url)
+
+            # 2. upload new image
+            ext = photo.filename.split(".")[-1].lower()
+            file_path = f"products/{uuid4()}.{ext}"
+            file_bytes = await photo.read()
+
             try:
-                old_image_url = product.get("image_url")
-                if old_image_url:
-                    old_filename = os.path.basename(old_image_url)
-                    old_path = os.path.join(UPLOAD_DIR, old_filename)
-                    if os.path.exists(old_path):
-                        try:
-                            os.remove(old_path)
-                        except Exception:
-                            pass
+                upload_res = supabase.storage.from_("product-image").upload(
+                    file_path,
+                    file_bytes,
+                    {"content-type": photo.content_type},
+                )
+            except Exception as e:
+                print("Supabase upload error:", e)
+                raise HTTPException(status_code=500, detail="Failed to upload image")
 
-            except Exception:
-                pass
+            if isinstance(upload_res, dict) and upload_res.get("error"):
+                print("Supabase upload error:", upload_res["error"])
+                raise HTTPException(status_code=500, detail="Failed to upload image")
 
-            # save new image
-            ext = os.path.splitext(photo.filename)[1]
-            unique_filename = f"{uuid4().hex}{ext}"
-            image_path = os.path.join(UPLOAD_DIR, unique_filename)
-
-            content = await photo.read()
-            # ensure upload dir exists
-            os.makedirs(UPLOAD_DIR, exist_ok=True)
-            with open(image_path, "wb") as f:
-                f.write(content)
-                
-            try:
-                image_url = request.url_for("uploads", path=unique_filename)
-            except Exception:
-                image_url = f"/uploads/{unique_filename}"
-
+            image_url = supabase.storage.from_("product-image").get_public_url(file_path)
             update_fields["image_url"] = str(image_url)
+
 
         # if price or discount changed (or both), recalc final_price
         # Use updated values if present, otherwise fall back to existing product values
@@ -144,6 +147,25 @@ async def update_product(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+
+async def _delete_image_from_supabase(image_url: str):
+    """Delete a single image from Supabase Storage if possible."""
+    if not image_url:
+        return
+
+    file_path = _get_file_path_from_url(image_url)
+    if not file_path:
+        return  # can't parse path, silently ignore
+
+    try:
+        res = supabase.storage.from_("product-image").remove([file_path])
+        # Optional: check res for error depending on supabase-py version
+        # print("Supabase remove result:", res)
+    except Exception as e:
+        # Don't break the whole API for a failed delete
+        print("Supabase delete error:", e)
+
+
 @router.delete("/product/delete/{product_id}/")
 async def delete_product(product_id: str, current_user=Depends(get_current_user)):
     try:
@@ -159,15 +181,9 @@ async def delete_product(product_id: str, current_user=Depends(get_current_user)
         # Delete image from uploads folder
         image_url = product.get("image_url")
         if image_url:
-            filename = os.path.basename(image_url)
-            path = os.path.join(UPLOAD_DIR, filename)
+            await _delete_image_from_supabase(image_url)
 
-            if os.path.exists(path):
-                try:
-                    os.remove(path)
-                except:
-                    pass
-
+        # 2. delete product from MongoDB
         await db.product.delete_one({"_id": ObjectId(product_id)})
 
         return {"msg": "Product deleted successfully"}

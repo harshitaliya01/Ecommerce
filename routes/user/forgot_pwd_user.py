@@ -46,8 +46,6 @@ async def forgot_password_request(payload: ForgotPasswordRequest):
 
 
 
-
-
 @router.post("/user/forgot-password/verify/")
 async def forgot_password_verify(payload: ResetPasswordWithOTP):
     try:

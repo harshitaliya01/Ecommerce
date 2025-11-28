@@ -1,21 +1,12 @@
 import os
 from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form,Request
-from db.db import db
+from db.db import db,supabase
 from utils.security import get_current_user
 from utils.check import chk_seller
+from uuid import uuid4
 
 router = APIRouter()
-
-import os, re
-UPLOAD_DIR = "uploads"
-for fn in os.listdir(UPLOAD_DIR):
-    if fn.endswith('"}') or fn.endswith("'}"):
-        clean = re.sub(r'["\'}]+$', '', fn)
-        os.rename(os.path.join(UPLOAD_DIR, fn), os.path.join(UPLOAD_DIR, clean))
-        print("Renamed", fn, "->", clean)
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @router.post("/product/add/")
 async def register_product(request:Request,
@@ -40,31 +31,24 @@ async def register_product(request:Request,
             raise HTTPException(status_code=400, detail="Only image files allowed")
 
         # Extract extension (jpg/png/webp etc.)
-        ext = os.path.splitext(photo.filename)[1]
-
-        # Create unique filename
-        unique_filename = f"{uuid4().hex}{ext}"
-
-        # Full path
-        image_path = os.path.join(UPLOAD_DIR, unique_filename)
-
-        # Save file
-        content = await photo.read()
-        with open(image_path, "wb") as f:
-            f.write(content)
-        # Save product in MongoDB
-
-        image_filename = unique_filename
-
-        if image_filename:
-            try:
-                image_url = request.url_for("uploads", path=image_filename)
-              
-            except:
-                image_url = f"/uploads/{image_filename}"
-              
-        else:
-            image_url = None
+        ext = photo.filename.split(".")[-1].lower()
+        file_path = f"products/{uuid4()}.{ext}" 
+        file_bytes = await photo.read()
+    # 4. upload to Supabase Storage
+        try:
+            upload_res = supabase.storage.from_("product-image").upload(
+                file_path,
+                file_bytes,
+                {"content-type": photo.content_type},
+            )
+        except Exception as e:
+            print("Supabase upload error:", e)
+            raise HTTPException(status_code=500, detail="Failed to upload image1")
+        if isinstance(upload_res, dict) and upload_res.get("error"):
+            print("Supabase upload error:", upload_res["error"])
+            raise HTTPException(status_code=500, detail="Failed to upload image2")
+      
+        image_url = supabase.storage.from_("product-image").get_public_url(file_path)
         product_doc = {
             "seller": seller["_id"],
             "name": name,
