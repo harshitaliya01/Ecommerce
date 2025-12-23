@@ -1,11 +1,12 @@
-from fastapi import APIRouter, HTTPException, Form
-from models.models import UserLogin,User,VerifyOTP, ForgotPasswordRequest, ResetPasswordWithOTP
+from fastapi import APIRouter,Depends, HTTPException, Form
+from models.models import UserLogin,User,VerifyOTP
 from datetime import datetime, timedelta
 from utils.mail import send_otp_email,generate_otp
+from utils.check import chk_user
 from db.db import db
 from pydantic import EmailStr
 from typing import Optional
-from utils.security import hash_password, verify_password, create_access_token
+from utils.security import hash_password, verify_password, create_access_token, get_current_user
 import os
 
 router = APIRouter()
@@ -161,3 +162,27 @@ async def login(usertry: UserLogin):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+
+
+
+
+
+
+@router.get("/user/me")
+async def get_profile(current_user= Depends(get_current_user)):
+    
+    user = await chk_user(current_user)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="User Not Found")
+
+    return {
+        "id": str(user["_id"]),
+        "name": user["name"],
+        "email": user["email"],
+        "is_verified": user["is_verified"],
+    }
